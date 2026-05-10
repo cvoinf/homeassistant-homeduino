@@ -203,27 +203,43 @@ class HomeduinoRFBinarySensor(CoordinatorEntity, BinarySensorEntity):
         """Handle updated data from the coordinator."""
         if not self.coordinator.connected():
             self._attr_available = False
-        else:
-            self._attr_available = True
             self.async_write_ha_state()
+            return
 
-            if not self.coordinator.data:
-                return
+        self._attr_available = True
 
-            if self.coordinator.data.get("protocol") != self.protocol:
-                return
+        if not self.coordinator.data:
+            self.async_write_ha_state()
+            return
 
-            if self.coordinator.data.get("values", {}).get("id") != self.id:
-                return
+        if self.coordinator.data.get("protocol") != self.protocol:
+            self.async_write_ha_state()
+            return
 
-            if self.coordinator.data.get("values", {}).get("unit") != self.unit:
-                return
+        if self.coordinator.data.get("values", {}).get("id") != self.id:
+            self.async_write_ha_state()
+            return
 
-            _LOGGER.debug(self.coordinator.data)
+        if self.coordinator.data.get("values", {}).get("unit") != self.unit:
+            self.async_write_ha_state()
+            return
 
-            self._attr_is_on = self.coordinator.data.get("values", {}).get(
-                self.field if self.field else "state"
-            )
+        _LOGGER.debug(self.coordinator.data)
+
+        raw = self.coordinator.data.get("values", {}).get(self.field if self.field else "state")
+
+        # Normalize to boolean where sensible; preserve None if missing
+        if raw is None:
+            val = None
+        else:
+            val = bool(raw)
+
+        # Invert for contact4 protocol
+        if self.protocol == "contact4" and val is not None:
+            val = not val
+
+        # Assign final state (None -> False by Home Assistant conventions is acceptable)
+        self._attr_is_on = bool(val) if val is not None else False
 
         self.async_write_ha_state()
 
